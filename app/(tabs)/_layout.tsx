@@ -1,45 +1,69 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform } from 'react-native';
-
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
+import { TabBarIcon } from '@/components/navigation/TabBarIcon'; // We'll create this component
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { Tabs } from 'expo-router';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const colorScheme = useColorScheme() ?? 'light';
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          default: {},
-        }),
+        tabBarActiveTintColor: Colors[colorScheme].tint,
+        headerShown: false, // Remove headers from tab screens
+        tabBarStyle: {
+          backgroundColor: Colors[colorScheme].componentBase,
+        },
+        headerStyle: {
+          backgroundColor: Colors[colorScheme].componentBase,
+        },
+        headerTintColor: Colors[colorScheme].text,
       }}>
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'home' : 'home-outline'} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="devices"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Water Devices',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'hardware-chip' : 'hardware-chip-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="metrics"
+        options={{
+          title: 'Metrics',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'bar-chart' : 'bar-chart-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="bills"
+        options={{
+          title: 'Bills',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'document-text' : 'document-text-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="test"
+        options={{
+          title: 'Test',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'bug' : 'bug-outline'} color={color} />
+          ),
         }}
       />
     </Tabs>
   );
-}
+} 

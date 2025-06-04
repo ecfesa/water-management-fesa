@@ -7,28 +7,19 @@ import { ActivityIndicator, Alert, Button, StyleSheet, View } from 'react-native
 
 export default function TestScreen() {
   const [loadingSimulate, setLoadingSimulate] = useState(false);
-  const [loadingDelete, setLoadingDelete] = useState(false);
 
   const handleSimulateMonth = async () => {
     setLoadingSimulate(true);
     try {
-      await apiClient.post('/test/simulate-month');
-      Alert.alert('Success', 'Month simulated successfully!');
+      const response = await apiClient.post('/test/simulate-month');
+      Alert.alert(
+        'Success', 
+        `Month simulated successfully!\n\nCreated:\n- ${response.data.categoriesCreated} categories\n- ${response.data.devicesUsed} devices\n- ${response.data.usagesCreated} usage records`
+      );
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to simulate month.');
     }
     setLoadingSimulate(false);
-  };
-
-  const handleDeleteLastSimulation = async () => {
-    setLoadingDelete(true);
-    try {
-      await apiClient.delete('/test/clear-simulated-data');
-      Alert.alert('Success', 'Last simulated data deleted!');
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to delete simulated data.');
-    }
-    setLoadingDelete(false);
   };
 
   return (
@@ -39,42 +30,20 @@ export default function TestScreen() {
         <ThemedText type="subtitle" style={styles.cardTitle}>Simulate Usage</ThemedText>
         <ThemedText style={styles.description}>
           Press this button to add a predefined set of water usage data for one month.
-          This is useful for testing dashboards and metrics.
+          This will create categories, devices, and usage records for testing dashboards and metrics.
         </ThemedText>
         <View style={styles.buttonWrapper}>
-        {loadingSimulate ? (
-          <ActivityIndicator color={Colors.light.highlight} />
-        ) : (
-          <Button 
-            title="Simulate One Month of Usage" 
-            onPress={handleSimulateMonth} 
-            disabled={loadingDelete}
-            color={Colors.light.highlight}
-          />
-        )}
+          {loadingSimulate ? (
+            <ActivityIndicator color={Colors.light.highlight} />
+          ) : (
+            <Button 
+              title="Simulate One Month of Usage" 
+              onPress={handleSimulateMonth}
+              color={Colors.light.highlight}
+            />
+          )}
         </View>
       </ThemedView>
-
-      <ThemedView style={styles.card}>
-        <ThemedText type="subtitle" style={styles.cardTitle}>Clear Simulated Data</ThemedText>
-        <ThemedText style={styles.description}>
-          Press this button to delete the last set of simulated data.
-          Use with caution.
-        </ThemedText>
-        <View style={styles.buttonWrapper}>
-        {loadingDelete ? (
-          <ActivityIndicator color={Colors.light.danger} />
-        ) : (
-          <Button 
-            title="Delete Last Simulated Data" 
-            onPress={handleDeleteLastSimulation} 
-            disabled={loadingSimulate}
-            color={Colors.light.danger}
-          />
-        )}
-        </View>
-      </ThemedView>
-
     </ThemedView>
   );
 }

@@ -25,12 +25,14 @@ const Device = sequelize.define('Device', {
   },
   userId: {
     type: DataTypes.UUID,
-    allowNull: true,
+    allowNull: false,
     references: {
       model: 'Users',
       key: 'id'
     }
   }
+}, {
+  timestamps: true
 });
 
 module.exports = Device; 

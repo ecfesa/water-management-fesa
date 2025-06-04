@@ -7,6 +7,16 @@ import { createContext, ReactNode, useContext, useEffect, useState } from 'react
 const TOKEN_KEY = 'authToken';
 const USER_KEY = 'userData';
 
+// Add keys for all stored data
+const STORAGE_KEYS = {
+  TOKEN_KEY,
+  USER_KEY,
+  DEVICES_KEY: 'devices',
+  USAGES_KEY: 'usages',
+  CATEGORIES_KEY: 'categories',
+  BILLS_KEY: 'bills'
+};
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -31,6 +41,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const segments = useSegments();
   const router = useRouter();
 
+  const clearAllData = async () => {
+    try {
+      // Clear all stored data
+      const keysToRemove = Object.values(STORAGE_KEYS);
+      await Promise.all(keysToRemove.map(key => AsyncStorage.removeItem(key)));
+      
+      // Clear any cached data in memory
+      setUser(null);
+      setToken(null);
+    } catch (error) {
+      console.error('Error clearing data:', error);
+    }
+  };
+
   useEffect(() => {
     const loadAuthData = async () => {
       setIsLoading(true);
@@ -43,10 +67,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (storedToken && storedUserJson) {
           setToken(storedToken);
           setUser(JSON.parse(storedUserJson));
+        } else {
+          // Clear all data if token or user data is missing
+          await clearAllData();
         }
       } catch (e) {
         console.error("Failed to load auth data", e);
-        await logout();
+        await clearAllData();
       }
       setIsLoading(false);
     };
@@ -67,6 +94,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const register = async (name: string, email: string, password: string) => {
     try {
+      // Clear all existing data before registering
+      await clearAllData();
+      
       const response = await authAPI.register({ name, email, password });
       const { token: authToken, id, name: userName, email: userEmail } = response.data;
       
@@ -81,12 +111,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       router.replace('/(tabs)/home');
     } catch (error) {
       console.error('Registration failed:', error);
+      await clearAllData(); // Clear data on error
       throw error;
     }
   };
 
   const login = async (email: string, password: string) => {
     try {
+      // Clear all existing data before logging in
+      await clearAllData();
+      
       const response = await authAPI.login({ email, password });
       const { token: authToken, id, name: userName, email: userEmail } = response.data;
       
@@ -101,18 +135,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       router.replace('/(tabs)/home');
     } catch (error) {
       console.error('Login failed:', error);
+      await clearAllData(); // Clear data on error
       throw error;
     }
   };
 
   const logout = async () => {
     try {
-      await Promise.all([
-        AsyncStorage.removeItem(TOKEN_KEY),
-        AsyncStorage.removeItem(USER_KEY)
-      ]);
-      setUser(null);
-      setToken(null);
+      // Clear all application data
+      await clearAllData();
       router.replace('/login');
     } catch (error) {
       console.error('Logout failed:', error);

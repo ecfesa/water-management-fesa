@@ -9,7 +9,9 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
-  },
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
+  }
 });
 
 // Add request interceptor for authentication
@@ -19,6 +21,17 @@ apiClient.interceptors.request.use(async (config) => {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Add timestamp to prevent caching
+    config.params = {
+      ...config.params,
+      _t: new Date().getTime()
+    };
+
+    // Handle multipart/form-data
+    if (config.data instanceof FormData) {
+      config.headers['Content-Type'] = 'multipart/form-data';
+    }
+
     return config;
   } catch (error) {
     return Promise.reject(error);
@@ -38,7 +51,7 @@ apiClient.interceptors.response.use(
   }
 );
 
-// API endpoints
+// API endpoints with no caching
 export const authAPI = {
   register: (data: { name: string; email: string; password: string }) =>
     apiClient.post<{ id: string; name: string; email: string; token: string }>('/users/register', data),

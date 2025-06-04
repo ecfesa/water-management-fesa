@@ -1,8 +1,27 @@
 const express = require('express');
 const cors = require('cors');
 const sequelize = require('./config/database');
+const multer = require('multer');
+const path = require('path');
 const { User, Category, Device, Usage, Bill } = require('./models');
 // const morgan = require('morgan'); // Optional: for logging HTTP requests
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/') // Make sure this directory exists
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname))
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
 
 // Import routes
 const userRoutes = require('./routes/userRoutes');
@@ -26,6 +45,7 @@ app.use(cors({
 }));
 app.use(express.json()); // Parses incoming JSON requests
 app.use(express.urlencoded({ extended: true })); // Parses urlencoded payloads
+app.use('/uploads', express.static('uploads')); // Serve uploaded files
 // if (process.env.NODE_ENV === 'development') {
 //   app.use(morgan('dev'));
 // }
@@ -53,6 +73,12 @@ app.use((err, req, res, next) => {
 // Database initialization and server start
 const startServer = async () => {
   try {
+    // Create uploads directory if it doesn't exist
+    const fs = require('fs');
+    if (!fs.existsSync('uploads')) {
+      fs.mkdirSync('uploads');
+    }
+
     // Sync all models with database
     await sequelize.sync({ alter: true });
     console.log('Database synchronized successfully');

@@ -4,23 +4,27 @@ const { Device, Category } = require('../models');
 exports.createDevice = async (req, res) => {
   try {
     const { name, description, categoryId } = req.body;
-    console.log('Received device data:', { name, description, categoryId });
+    const userId = req.user.id; // Get user ID from authenticated request
     
-    // Validate category exists
-    const category = await Category.findByPk(categoryId);
+    // Validate category exists and belongs to user
+    const category = await Category.findOne({
+      where: { 
+        id: categoryId,
+        userId
+      }
+    });
+    
     if (!category) {
-      return res.status(400).json({ message: `Category with ID ${categoryId} not found` });
+      return res.status(400).json({ message: `Category with ID ${categoryId} not found or doesn't belong to you` });
     }
 
-    // Create device without userId for now
     const device = await Device.create({ 
       name, 
       description, 
       categoryId,
-      userId: null // Explicitly set to null since we don't have user authentication yet
+      userId
     });
     
-    console.log('Created device:', device.toJSON());
     res.status(201).json(device);
   } catch (error) {
     console.error('Error creating device:', error);
@@ -34,7 +38,10 @@ exports.createDevice = async (req, res) => {
 // Get all devices
 exports.getDevices = async (req, res) => {
   try {
+    const userId = req.user.id; // Get user ID from authenticated request
+
     const devices = await Device.findAll({
+      where: { userId }, // Only get devices for this user
       include: [{
         model: Category,
         attributes: ['name', 'icon']
@@ -49,7 +56,13 @@ exports.getDevices = async (req, res) => {
 // Get device by ID
 exports.getDeviceById = async (req, res) => {
   try {
-    const device = await Device.findByPk(req.params.id, {
+    const userId = req.user.id; // Get user ID from authenticated request
+
+    const device = await Device.findOne({
+      where: { 
+        id: req.params.id,
+        userId // Ensure device belongs to user
+      },
       include: [{
         model: Category,
         attributes: ['name', 'icon']
@@ -70,10 +83,31 @@ exports.getDeviceById = async (req, res) => {
 exports.updateDevice = async (req, res) => {
   try {
     const { name, description, categoryId } = req.body;
-    const device = await Device.findByPk(req.params.id);
+    const userId = req.user.id; // Get user ID from authenticated request
+
+    const device = await Device.findOne({
+      where: { 
+        id: req.params.id,
+        userId // Ensure device belongs to user
+      }
+    });
     
     if (!device) {
       return res.status(404).json({ message: 'Device not found' });
+    }
+
+    // If categoryId is being updated, validate it belongs to user
+    if (categoryId) {
+      const category = await Category.findOne({
+        where: { 
+          id: categoryId,
+          userId
+        }
+      });
+      
+      if (!category) {
+        return res.status(400).json({ message: `Category with ID ${categoryId} not found or doesn't belong to you` });
+      }
     }
     
     if (name) device.name = name;
@@ -90,7 +124,14 @@ exports.updateDevice = async (req, res) => {
 // Delete device
 exports.deleteDevice = async (req, res) => {
   try {
-    const device = await Device.findByPk(req.params.id);
+    const userId = req.user.id; // Get user ID from authenticated request
+
+    const device = await Device.findOne({
+      where: { 
+        id: req.params.id,
+        userId // Ensure device belongs to user
+      }
+    });
     
     if (!device) {
       return res.status(404).json({ message: 'Device not found' });

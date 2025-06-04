@@ -9,8 +9,7 @@ const Category = sequelize.define('Category', {
   },
   name: {
     type: DataTypes.STRING,
-    allowNull: false,
-    unique: true
+    allowNull: false
   },
   description: {
     type: DataTypes.STRING,
@@ -23,6 +22,14 @@ const Category = sequelize.define('Category', {
   color: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  userId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   }
 }, {
   timestamps: true

@@ -4,9 +4,11 @@ import { Colors } from '@/constants/Colors';
 import { Bill } from '@/types';
 import apiClient from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Button, Image, Modal, RefreshControl, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Button, Image, Modal, Platform, RefreshControl, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 // import { VictoryLine, VictoryChart, VictoryAxis, VictoryLabel } from 'victory-native';
 
 const formatDate = (dateString: string | Date | undefined) => {
@@ -18,18 +20,18 @@ const formatDate = (dateString: string | Date | undefined) => {
 interface NewBillData {
     amount: string;
     waterUsed: string;
-    dueDate: string; // Keep as string for input, convert on submit
-    billPeriodStart: string;
-    billPeriodEnd: string;
+    dueDate: Date;
+    billPeriodStart: Date | null;
+    billPeriodEnd: Date | null;
     photo: ImagePicker.ImagePickerAsset | null;
 }
 
 const initialNewBillState: NewBillData = {
     amount: '',
     waterUsed: '',
-    dueDate: '',
-    billPeriodStart: '',
-    billPeriodEnd: '',
+    dueDate: new Date(),
+    billPeriodStart: null,
+    billPeriodEnd: null,
     photo: null,
 };
 
@@ -39,16 +41,17 @@ export default function BillsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [newBill, setNewBill] = useState<NewBillData>(initialNewBillState);
-  const [editingBill, setEditingBill] = useState<Bill | null>(null); // For editing
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showComparisonGraph, setShowComparisonGraph] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState<'dueDate' | 'startDate' | 'endDate' | null>(null);
 
   const fetchBills = useCallback(async () => {
     if (!refreshing) setLoading(true);
     setError(null);
     try {
-      const response = await apiClient.get<{ bills: Bill[] }>('/bills?limit=12&sort=dueDate:desc'); // Fetch last 12, newest first
+      const response = await apiClient.get<{ bills: Bill[] }>('/bills?limit=12&sort=dueDate:desc');
       setBills(response.data.bills || []);
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch bills.';
@@ -79,60 +82,163 @@ export default function BillsScreen() {
     setNewBill({
         amount: bill.amount.toString(),
         waterUsed: bill.waterUsed.toString(),
-        dueDate: new Date(bill.dueDate).toISOString().split('T')[0], // Format for date input
-        billPeriodStart: new Date(bill.billPeriodStart).toISOString().split('T')[0],
-        billPeriodEnd: new Date(bill.billPeriodEnd).toISOString().split('T')[0],
-        photo: null, // Photo re-upload would be needed for edit, or handle existing photoUrl
+        dueDate: new Date(bill.dueDate),
+        billPeriodStart: bill.billPeriodStart ? new Date(bill.billPeriodStart) : null,
+        billPeriodEnd: bill.billPeriodEnd ? new Date(bill.billPeriodEnd) : null,
+        photo: null,
+        
     });
     setModalVisible(true);
   };
 
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(null);
+    if (selectedDate) {
+      setNewBill(prev => ({
+        ...prev,
+        [showDatePicker === 'dueDate' ? 'dueDate' : 
+         showDatePicker === 'startDate' ? 'billPeriodStart' : 'billPeriodEnd']: selectedDate
+      }));
+    }
+  };
+
   const handleSaveBill = async () => {
-    if (!newBill.amount || !newBill.waterUsed || !newBill.dueDate || !newBill.billPeriodStart || !newBill.billPeriodEnd) {
-      Alert.alert('Error', 'Please fill in all required fields.');
+    if (!newBill.amount || !newBill.waterUsed || !newBill.dueDate) {
+      Alert.alert('Error', 'Please fill in all required fields (Amount, Water Used, and Due Date).');
       return;
     }
+
+    // Validate numeric fields
+    const amount = parseFloat(newBill.amount);
+    const waterUsed = parseFloat(newBill.waterUsed);
+
+    if (isNaN(amount) || amount < 0) {
+      Alert.alert('Error', 'Please enter a valid amount.');
+      return;
+    }
+
+    if (isNaN(waterUsed) || waterUsed < 0) {
+      Alert.alert('Error', 'Please enter a valid water usage amount.');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
-    try {
-      const formData = new FormData();
-      formData.append('amount', newBill.amount);
-      formData.append('waterUsed', newBill.waterUsed);
-      formData.append('dueDate', new Date(newBill.dueDate).toISOString());
-      formData.append('billPeriodStart', new Date(newBill.billPeriodStart).toISOString());
-      formData.append('billPeriodEnd', new Date(newBill.billPeriodEnd).toISOString());
-      // TODO: Add userId if not handled by backend through auth token
 
+    try {
+      // Get the auth token
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Create FormData for multipart/form-data
+      const formData = new FormData();
+      
+      // Add basic fields
+      formData.append('amount', amount.toString());
+      formData.append('waterUsed', waterUsed.toString());
+      formData.append('dueDate', newBill.dueDate.toISOString());
+      
+      if (newBill.billPeriodStart) {
+        formData.append('billPeriodStart', newBill.billPeriodStart.toISOString());
+      }
+      if (newBill.billPeriodEnd) {
+        formData.append('billPeriodEnd', newBill.billPeriodEnd.toISOString());
+      }
+
+      // Add photo if exists
       if (newBill.photo) {
         const uriParts = newBill.photo.uri.split('.');
         const fileType = uriParts[uriParts.length - 1];
         formData.append('billImage', {
-          uri: newBill.photo.uri,
+          uri: Platform.OS === 'ios' ? newBill.photo.uri.replace('file://', '') : newBill.photo.uri,
           name: `bill_${Date.now()}.${fileType}`,
           type: `image/${fileType}`,
         } as any);
       }
 
-      if (editingBill) {
-        // Update existing bill
-        // await apiClient.put(`/bills/${editingBill.id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-        Alert.alert('Success', 'Bill updated! (Mocked)');
-      } else {
-        // Add new bill
-        // await apiClient.post('/bills', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-        Alert.alert('Success', 'Bill added! (Mocked)');
+      const endpoint = editingBill ? `/bills/${editingBill.id}` : '/bills';
+      const method = editingBill ? 'put' : 'post';
+      
+      console.log(`Making ${method.toUpperCase()} request to ${endpoint}`);
+      console.log('FormData contents:', {
+        amount: formData.get('amount'),
+        waterUsed: formData.get('waterUsed'),
+        dueDate: formData.get('dueDate'),
+        billPeriodStart: formData.get('billPeriodStart'),
+        billPeriodEnd: formData.get('billPeriodEnd'),
+        hasImage: !!formData.get('billImage')
+      });
+      
+      // Send the request with FormData
+      const response = await fetch(`${apiClient.defaults.baseURL}${endpoint}`, {
+        method: method.toUpperCase(),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData
+      });
+
+      // Handle the response
+      const responseText = await response.text();
+      let data;
+      
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Error parsing response:', e);
+        throw new Error('Invalid response from server');
       }
+
+      if (!response.ok) {
+        throw {
+          response: {
+            data: data,
+            status: response.status
+          }
+        };
+      }
+
+      console.log('API Response:', data);
+
+      Alert.alert('Success', `Bill ${editingBill ? 'updated' : 'added'} successfully!`);
       
       setModalVisible(false);
       setNewBill(initialNewBillState);
       setEditingBill(null);
-      fetchBills(); // Refresh list
+      fetchBills();
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to save bill.';
-      setError(errorMessage);
-      Alert.alert('Save Failed', errorMessage);
+      console.error('Error saving bill:', err);
+      
+      // Log the full error details
+      console.error('Full error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        headers: err.response?.headers,
+        errors: err.response?.data?.errors
+      });
+
+      // Format validation errors if they exist
+      let errorMessage = err.response?.data?.message || err.message || 'Failed to save bill.';
+      let errorDetails = '';
+
+      if (err.response?.data?.errors) {
+        errorDetails = err.response.data.errors
+          .map((error: any) => `${error.path}: ${error.msg}`)
+          .join('\n');
+      } else if (err.response?.data?.details) {
+        errorDetails = err.response.data.details;
+      }
+
+      const fullErrorMessage = errorMessage + (errorDetails ? `\n\nDetails:\n${errorDetails}` : '');
+      setError(fullErrorMessage);
+      Alert.alert('Save Failed', fullErrorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleDeleteBill = (billId: string) => {
@@ -140,8 +246,8 @@ export default function BillsScreen() {
         { text: "Cancel", style: "cancel" },
         { text: "Delete", style: "destructive", onPress: async () => {
             try {
-                // await apiClient.delete(`/bills/${billId}`);
-                Alert.alert("Success", "Bill deleted (Mocked)");
+                await apiClient.delete(`/bills/${billId}`);
+                Alert.alert("Success", "Bill deleted successfully");
                 fetchBills();
             } catch (error: any) {
                 Alert.alert("Error", error.response?.data?.message || "Failed to delete bill");
@@ -161,7 +267,7 @@ export default function BillsScreen() {
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [4, 3],
-            quality: 0.8, // Slightly reduced quality for faster uploads
+            quality: 0.8,
         });
         if (!result.canceled && result.assets && result.assets.length > 0) {
             setNewBill({ ...newBill, photo: result.assets[0] });
@@ -169,6 +275,27 @@ export default function BillsScreen() {
     } catch (error) {
         console.error("ImagePicker Error: ", error);
         Alert.alert('Image Error', 'Could not select image.')
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Sorry, we need camera permissions to make this work!');
+      return;
+    }
+    try {
+        let result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.8,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            setNewBill({ ...newBill, photo: result.assets[0] });
+        }
+    } catch (error) {
+        console.error("Camera Error: ", error);
+        Alert.alert('Camera Error', 'Could not take photo.')
     }
   };
 
@@ -274,7 +401,7 @@ export default function BillsScreen() {
           visible={modalVisible}
           onRequestClose={() => {
             setModalVisible(false);
-            setEditingBill(null); // Clear editing state on modal close
+            setEditingBill(null);
           }}>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalScrollViewContainer}>
@@ -282,32 +409,88 @@ export default function BillsScreen() {
               <ThemedText type="subtitle" style={styles.modalTitle}>{editingBill ? 'Edit Bill' : 'Add New Bill'}</ThemedText>
               
               <ThemedText style={styles.label}>Amount ($)</ThemedText>
-              <TextInput placeholder="e.g., 75.50" value={newBill.amount} onChangeText={text => setNewBill({...newBill, amount: text})} style={styles.input} keyboardType="numeric" />
+              <TextInput 
+                placeholder="e.g., 75.50" 
+                value={newBill.amount} 
+                onChangeText={text => setNewBill({...newBill, amount: text})} 
+                style={styles.input} 
+                keyboardType="numeric" 
+              />
               
               <ThemedText style={styles.label}>Water Used (Liters)</ThemedText>
-              <TextInput placeholder="e.g., 1200" value={newBill.waterUsed} onChangeText={text => setNewBill({...newBill, waterUsed: text})} style={styles.input} keyboardType="numeric" />
+              <TextInput 
+                placeholder="e.g., 1200" 
+                value={newBill.waterUsed} 
+                onChangeText={text => setNewBill({...newBill, waterUsed: text})} 
+                style={styles.input} 
+                keyboardType="numeric" 
+              />
               
-              <ThemedText style={styles.label}>Due Date</ThemedText>
-              <TextInput placeholder="YYYY-MM-DD" value={newBill.dueDate} onChangeText={text => setNewBill({...newBill, dueDate: text})} style={styles.input} />
-
-              <ThemedText style={styles.label}>Bill Period Start Date</ThemedText>
-              <TextInput placeholder="YYYY-MM-DD" value={newBill.billPeriodStart} onChangeText={text => setNewBill({...newBill, billPeriodStart: text})} style={styles.input} />
-
-              <ThemedText style={styles.label}>Bill Period End Date</ThemedText>
-              <TextInput placeholder="YYYY-MM-DD" value={newBill.billPeriodEnd} onChangeText={text => setNewBill({...newBill, billPeriodEnd: text})} style={styles.input} />
-              
-              <TouchableOpacity onPress={pickImage} style={[styles.imagePickerButton, styles.roundedButton]}>
-                <Ionicons name="camera-outline" size={24} color={Colors.light.highlight} />
-                <ThemedText style={{marginLeft: 10, color: Colors.light.highlight}}>
-                  {newBill.photo ? 'Image Selected' : (editingBill && editingBill.photoUrl ? 'Replace Photo (Optional)' : 'Upload Bill Photo (Optional)')}
-                </ThemedText>
+              <ThemedText style={styles.label}>Due Date *</ThemedText>
+              <TouchableOpacity 
+                style={styles.dateInput} 
+                onPress={() => setShowDatePicker('dueDate')}
+              >
+                <ThemedText>{formatDate(newBill.dueDate)}</ThemedText>
               </TouchableOpacity>
-              {newBill.photo?.uri && 
-                <Image source={{ uri: newBill.photo.uri }} style={styles.previewImage} />
-              }
-              {!newBill.photo && editingBill?.photoUrl &&
-                 <Image source={{ uri: editingBill.photoUrl }} style={styles.previewImage} /> // Show existing photo if editing and no new one picked
-              }
+
+              <ThemedText style={styles.label}>Bill Period Start Date (Optional)</ThemedText>
+              <TouchableOpacity 
+                style={styles.dateInput} 
+                onPress={() => setShowDatePicker('startDate')}
+              >
+                <ThemedText>{newBill.billPeriodStart ? formatDate(newBill.billPeriodStart) : 'Not set'}</ThemedText>
+              </TouchableOpacity>
+
+              <ThemedText style={styles.label}>Bill Period End Date (Optional)</ThemedText>
+              <TouchableOpacity 
+                style={styles.dateInput} 
+                onPress={() => setShowDatePicker('endDate')}
+              >
+                <ThemedText>{newBill.billPeriodEnd ? formatDate(newBill.billPeriodEnd) : 'Not set'}</ThemedText>
+              </TouchableOpacity>
+              
+              {showDatePicker && (
+                <DateTimePicker
+                  value={showDatePicker === 'dueDate' ? newBill.dueDate : 
+                         showDatePicker === 'startDate' ? (newBill.billPeriodStart || new Date()) : 
+                         (newBill.billPeriodEnd || new Date())}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                />
+              )}
+
+              <View style={styles.imagePickerContainer}>
+                <TouchableOpacity onPress={pickImage} style={[styles.imagePickerButton, styles.roundedButton]}>
+                  <Ionicons name="images-outline" size={24} color={Colors.light.highlight} />
+                  <ThemedText style={{marginLeft: 10, color: Colors.light.highlight}}>
+                    Choose from Gallery
+                  </ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity onPress={takePhoto} style={[styles.imagePickerButton, styles.roundedButton, {marginTop: 10}]}>
+                  <Ionicons name="camera-outline" size={24} color={Colors.light.highlight} />
+                  <ThemedText style={{marginLeft: 10, color: Colors.light.highlight}}>
+                    Take Photo
+                  </ThemedText>
+                </TouchableOpacity>
+
+                {(newBill.photo?.uri || editingBill?.photoUrl) && (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image 
+                      source={{ uri: newBill.photo?.uri || editingBill?.photoUrl }} 
+                      style={styles.previewImage} 
+                    />
+                    <TouchableOpacity 
+                      style={styles.removeImageButton}
+                      onPress={() => setNewBill({ ...newBill, photo: null })}
+                    >
+                      <Ionicons name="close-circle" size={24} color={Colors.light.danger} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
 
               {error && <ThemedText style={styles.modalErrorText}>{error}</ThemedText>}
 
@@ -330,7 +513,7 @@ export default function BillsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
-  contentContainer: { padding: 15, paddingBottom: 30 }, // Added paddingBottom
+  contentContainer: { padding: 15, paddingBottom: 30 },
   centered: { justifyContent: 'center', alignItems: 'center', flex:1 },
   headerActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   screenTitle: { flex: 1, fontSize: 24, fontWeight: 'bold', color: Colors.light.text },
@@ -381,16 +564,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    flexGrow: 1, // Important for ScrollView in Modal
+    flexGrow: 1,
   },
   modalContent: {
     width: '90%',
-    maxWidth: 400, // Max width for larger screens
+    maxWidth: 400,
     backgroundColor: Colors.light.background,
     borderRadius: 12,
     padding: 20,
     alignItems: 'stretch',
-    marginVertical: 20, // Allow scroll if content overflows
+    marginVertical: 20,
   },
   modalTitle: {
     marginBottom: 20,
@@ -414,31 +597,42 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     fontSize: 16,
   },
+  imagePickerContainer: {
+    marginVertical: 15,
+  },
   imagePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.componentBase,
     padding: 12,
     borderRadius: 8,
-    marginBottom: 10,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.light.detailsBase,
   },
   roundedButton: { borderRadius: 8 },
+  imagePreviewContainer: {
+    marginTop: 15,
+    alignItems: 'center',
+  },
   previewImage: {
-    width: 120,
-    height: 120,
+    width: 200,
+    height: 200,
     borderRadius: 8,
-    alignSelf: 'center',
-    marginBottom: 15,
     borderWidth: 1,
     borderColor: Colors.light.detailsBase,
   },
+  removeImageButton: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    backgroundColor: Colors.light.background,
+    borderRadius: 12,
+  },
   modalErrorText: {
-      color: Colors.light.danger,
-      textAlign: 'center',
-      marginBottom: 10,
+    color: Colors.light.danger,
+    textAlign: 'center',
+    marginBottom: 10,
   },
   modalActions: {
     flexDirection: 'row',
@@ -466,5 +660,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: Colors.light.text,
     opacity: 0.7
-  }
+  },
+  dateInput: {
+    height: 50,
+    borderColor: Colors.light.detailsBase,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 15,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+  },
 }); 

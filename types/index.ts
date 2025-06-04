@@ -49,8 +49,8 @@ export interface Bill {
   dueDate: string;
   paidDate?: string;
   waterUsed: number;
-  billPeriodStart: string;
-  billPeriodEnd: string;
+  billPeriodStart?: string;
+  billPeriodEnd?: string;
   photoUrl?: string;
   createdAt: string;
   updatedAt: string;
@@ -109,8 +109,8 @@ export interface CreateBillRequest {
   amount: number;
   dueDate: string;
   waterUsed: number;
-  billPeriodStart: string;
-  billPeriodEnd: string;
+  billPeriodStart?: string;
+  billPeriodEnd?: string;
   photoUrl?: string;
 }
 

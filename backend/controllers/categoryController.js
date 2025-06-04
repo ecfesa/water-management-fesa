@@ -4,7 +4,13 @@ const { Category, Device } = require('../models');
 exports.createCategory = async (req, res) => {
   try {
     const { name, icon } = req.body;
-    const category = await Category.create({ name, icon });
+    const userId = req.user.id; // Get user ID from authenticated request
+
+    const category = await Category.create({ 
+      name, 
+      icon,
+      userId 
+    });
     res.status(201).json(category);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -14,7 +20,10 @@ exports.createCategory = async (req, res) => {
 // Get all categories
 exports.getCategories = async (req, res) => {
   try {
+    const userId = req.user.id; // Get user ID from authenticated request
+
     const categories = await Category.findAll({
+      where: { userId }, // Only get categories for this user
       include: [{
         model: Device,
         attributes: ['id', 'name', 'description', 'categoryId'],
@@ -31,8 +40,6 @@ exports.getCategories = async (req, res) => {
       };
     });
     
-    console.log('Categories with devices:', JSON.stringify(transformedCategories, null, 2));
-    
     res.json(transformedCategories);
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -43,13 +50,20 @@ exports.getCategories = async (req, res) => {
 // Get category by ID
 exports.getCategoryById = async (req, res) => {
   try {
-    const category = await Category.findByPk(req.params.id, {
+    const userId = req.user.id; // Get user ID from authenticated request
+
+    const category = await Category.findOne({
+      where: { 
+        id: req.params.id,
+        userId // Ensure category belongs to user
+      },
       include: [{
         model: Device,
         attributes: ['id', 'name', 'description'],
         as: 'Devices'
       }]
     });
+
     if (!category) {
       return res.status(404).json({ message: 'Category not found' });
     }
@@ -63,7 +77,14 @@ exports.getCategoryById = async (req, res) => {
 exports.updateCategory = async (req, res) => {
   try {
     const { name, icon } = req.body;
-    const category = await Category.findByPk(req.params.id);
+    const userId = req.user.id; // Get user ID from authenticated request
+
+    const category = await Category.findOne({
+      where: { 
+        id: req.params.id,
+        userId // Ensure category belongs to user
+      }
+    });
     
     if (!category) {
       return res.status(404).json({ message: 'Category not found' });
@@ -82,7 +103,14 @@ exports.updateCategory = async (req, res) => {
 // Delete category
 exports.deleteCategory = async (req, res) => {
   try {
-    const category = await Category.findByPk(req.params.id);
+    const userId = req.user.id; // Get user ID from authenticated request
+
+    const category = await Category.findOne({
+      where: { 
+        id: req.params.id,
+        userId // Ensure category belongs to user
+      }
+    });
     
     if (!category) {
       return res.status(404).json({ message: 'Category not found' });

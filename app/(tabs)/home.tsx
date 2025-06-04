@@ -1,11 +1,12 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
 import { Device, Usage } from '@/types';
 import { devicesAPI, usageAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Button, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Button, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 interface UsageWithDevice extends Usage {
   Device: {
@@ -20,6 +21,7 @@ interface HomeData {
 }
 
 export default function HomeScreen() {
+  const { logout, user } = useAuth();
   const [data, setData] = useState<HomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -29,6 +31,9 @@ export default function HomeScreen() {
     if (!refreshing) setLoading(true);
     setError(null);
     try {
+      // Clear any existing data before fetching new data
+      setData(null);
+
       // Fetch all usages and devices
       const [usagesResponse, devicesResponse] = await Promise.all([
         usageAPI.getAll(),
@@ -53,7 +58,10 @@ export default function HomeScreen() {
       deviceUsage.forEach((usage, deviceId) => {
         if (usage > maxUsage) {
           maxUsage = usage;
-          mostUsedDevice = devices.find((d: Device) => d.id === deviceId);
+          const foundDevice = devices.find((d: Device) => d.id === deviceId);
+          if (foundDevice) {
+            mostUsedDevice = foundDevice;
+          }
         }
       });
 
@@ -88,6 +96,7 @@ export default function HomeScreen() {
         last10Usages: sortedUsages
       });
     } catch (err: any) {
+      console.error('Error fetching data:', err);
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch dashboard data.';
       setError(errorMessage);
       Alert.alert('Error', errorMessage);
@@ -98,13 +107,25 @@ export default function HomeScreen() {
   }, [refreshing]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (user) {
+      fetchData();
+    }
+  }, [fetchData, user]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
   }, [fetchData]);
+
+  const handleLogout = async () => {
+    try {
+      // Clear data before logging out
+      setData(null);
+      await logout();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to logout. Please try again.');
+    }
+  };
 
   if (loading && !refreshing) {
     return (
@@ -137,6 +158,13 @@ export default function HomeScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.light.tint]} />}
     >
       <ThemedView style={styles.contentContainer}>
+        <View style={styles.header}>
+          <ThemedText type="title">Water Usage Dashboard</ThemedText>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={24} color={Colors.light.danger} />
+          </TouchableOpacity>
+        </View>
+
         {noData ? (
           <ThemedView style={[styles.card, styles.centered, {minHeight: 200}]}>
             <Ionicons name="information-circle-outline" size={48} color={Colors.light.icon} />
@@ -263,5 +291,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: Colors.light.highlight,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 5,
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: 8,
   },
 }); 

@@ -41,7 +41,7 @@ const Usage = sequelize.define('Usage', {
   },
   userId: {
     type: DataTypes.UUID,
-    allowNull: true,
+    allowNull: false,
     references: {
       model: 'Users',
       key: 'id'

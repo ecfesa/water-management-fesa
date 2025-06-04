@@ -72,13 +72,20 @@ const ensureCategoriesAndDevicesExist = async (userId) => {
       throw new Error(`User with ID ${userId} not found`);
     }
     
-    // Get or create categories
-    const existingCategories = await Category.findAll();
+    // Get or create categories for this specific user
+    const existingCategories = await Category.findAll({
+      where: { userId }
+    });
     let categories = existingCategories;
     
     if (existingCategories.length === 0) {
-      categories = await Category.bulkCreate(defaultCategories);
-      console.log('Created default categories:', categories.map(c => c.name));
+      // Add userId to each default category
+      const categoriesWithUserId = defaultCategories.map(cat => ({
+        ...cat,
+        userId
+      }));
+      categories = await Category.bulkCreate(categoriesWithUserId);
+      console.log('Created default categories for user:', categories.map(c => c.name));
     }
 
     // Create a device for each category if none exist
@@ -95,14 +102,19 @@ const ensureCategoriesAndDevicesExist = async (userId) => {
 
       if (existingDevices.length === 0) {
         console.log(`Creating new device for category: ${category.name}`);
-        const newDevice = await Device.create({
-          name: `${category.name} Device`,
-          description: `Default device for ${category.name}`,
-          categoryId: category.id, // Ensure categoryId is set
-          userId: userId
-        });
-        devices.push(newDevice);
-        console.log(`Created device for ${category.name}:`, newDevice.name);
+        try {
+          const newDevice = await Device.create({
+            name: `${category.name} Device`,
+            description: `Default device for ${category.name}`,
+            categoryId: category.id,
+            userId: userId
+          });
+          devices.push(newDevice);
+          console.log(`Created device for ${category.name}:`, newDevice.name);
+        } catch (error) {
+          console.error(`Error creating device for category ${category.name}:`, error);
+          throw error;
+        }
       } else {
         console.log(`Found existing devices for ${category.name}:`, existingDevices.length);
         devices.push(...existingDevices);

@@ -16,10 +16,18 @@ const Device = sequelize.define('Device', {
     allowNull: true
   },
   categoryId: {
-    type: DataTypes.UUID,
+    type: DataTypes.INTEGER,
     allowNull: false,
     references: {
       model: 'Categories',
+      key: 'id'
+    }
+  },
+  userId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Users',
       key: 'id'
     }
   }

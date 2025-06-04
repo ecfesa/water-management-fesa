@@ -4,10 +4,25 @@ const { Device, Category } = require('../models');
 exports.createDevice = async (req, res) => {
   try {
     const { name, description, categoryId } = req.body;
-    const device = await Device.create({ name, description, categoryId });
+    
+    const category = await Category.findByPk(categoryId);
+    if (!category) {
+      return res.status(400).json({ message: `Category with ID ${categoryId} not found` });
+    }
+
+    const device = await Device.create({ 
+      name, 
+      description, 
+      categoryId,
+      userId: null
+    });
+    
     res.status(201).json(device);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(400).json({ 
+      message: error.message,
+      details: error.errors ? error.errors.map(e => e.message) : undefined
+    });
   }
 };
 

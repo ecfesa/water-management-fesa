@@ -1,4 +1,4 @@
-const { Category } = require('../models');
+const { Category, Device } = require('../models');
 
 // Create new category
 exports.createCategory = async (req, res) => {
@@ -14,9 +14,28 @@ exports.createCategory = async (req, res) => {
 // Get all categories
 exports.getCategories = async (req, res) => {
   try {
-    const categories = await Category.findAll();
-    res.json(categories);
+    const categories = await Category.findAll({
+      include: [{
+        model: Device,
+        attributes: ['id', 'name', 'description', 'categoryId'],
+        as: 'devices'
+      }]
+    });
+    
+    // Transform the response to ensure devices are properly included
+    const transformedCategories = categories.map(category => {
+      const plainCategory = category.get({ plain: true });
+      return {
+        ...plainCategory,
+        devices: plainCategory.devices || []
+      };
+    });
+    
+    console.log('Categories with devices:', JSON.stringify(transformedCategories, null, 2));
+    
+    res.json(transformedCategories);
   } catch (error) {
+    console.error('Error fetching categories:', error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -24,7 +43,12 @@ exports.getCategories = async (req, res) => {
 // Get category by ID
 exports.getCategoryById = async (req, res) => {
   try {
-    const category = await Category.findByPk(req.params.id);
+    const category = await Category.findByPk(req.params.id, {
+      include: [{
+        model: Device,
+        attributes: ['id', 'name', 'description']
+      }]
+    });
     if (!category) {
       return res.status(404).json({ message: 'Category not found' });
     }

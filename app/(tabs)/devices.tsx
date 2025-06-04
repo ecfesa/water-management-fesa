@@ -11,6 +11,7 @@ interface CategoryDisplay extends Category {
     iconName?: keyof typeof Ionicons.glyphMap;
     totalUsage?: number;
     devices?: Partial<Device>[]; 
+    Devices?: Partial<Device>[];
     description?: string;
     icon?: string;
 }
@@ -58,23 +59,32 @@ export default function DevicesScreen() {
   const [deviceName, setDeviceName] = useState('');
   const [deviceDescription, setDeviceDescription] = useState('');
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const fetchData = useCallback(async () => {
     if (!refreshing) setLoading(true);
     setError(null);
     try {
-      // Example: Fetch categories. Devices and totalUsage might be fetched per category or in a more complex endpoint
       const response = await apiClient.get<CategoryDisplay[]>('/categories'); 
-      // If devices/usage are not included, you might need further calls or a different backend structure
-      // For now, assuming the API returns categories that can be mapped to CategoryDisplay
-      setCategories(response.data.map(cat => ({ // Ensure mock data or API data matches this structure
-        ...cat,
-        iconName: cat.iconName || 'hardware-chip-outline', // Default icon
-        totalUsage: cat.totalUsage || 0,
-        devices: cat.devices || []
-      })));
-
-      console.log(categories);
+      console.log('API Response:', JSON.stringify(response.data, null, 2));
+      
+      const mappedCategories = response.data.map(cat => {
+        // Get devices from either devices or Devices property
+        const devices = cat.devices || cat.Devices || [];
+        console.log(`Devices for category ${cat.name}:`, JSON.stringify(devices, null, 2));
+        
+        return {
+          ...cat,
+          iconName: cat.iconName || 'hardware-chip-outline',
+          totalUsage: cat.totalUsage || 0,
+          devices: devices
+        };
+      });
+      
+      console.log('Mapped Categories:', JSON.stringify(mappedCategories, null, 2));
+      setCategories(mappedCategories);
     } catch (err: any) {
+      console.error('Error fetching categories:', err);
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch device categories.';
       setError(errorMessage);
       Alert.alert('Error', errorMessage);
@@ -193,6 +203,7 @@ export default function DevicesScreen() {
 
   const handleSaveDevice = async () => {
     try {
+      // Input validation
       if (!deviceName.trim()) {
         Alert.alert('Error', 'Device name is required');
         return;
@@ -203,23 +214,71 @@ export default function DevicesScreen() {
         return;
       }
 
+      // Check if category exists
+      const categoryExists = categories.some(cat => cat.id === parentCategoryForNewDevice);
+      if (!categoryExists) {
+        Alert.alert('Error', 'Selected category no longer exists');
+        return;
+      }
+
+      setIsSaving(true);
+
       const deviceData = {
         name: deviceName.trim(),
-        description: deviceDescription.trim(),
+        description: deviceDescription.trim() || null, // Set to null if empty
         categoryId: parentCategoryForNewDevice
       };
 
+      // Debug logging
+      console.log('Sending device data:', {
+        ...deviceData,
+        categoryId: deviceData.categoryId,
+        categoryExists: categories.some(cat => cat.id === deviceData.categoryId)
+      });
+
+      // Additional validation
+      if (deviceData.name.length > 255) { // Assuming max length of 255 for name
+        Alert.alert('Error', 'Device name is too long (maximum 255 characters)');
+        return;
+      }
+
+      let response;
       if (editingDevice) {
-        await apiClient.put(`/devices/${editingDevice.id}`, deviceData);
+        response = await apiClient.put(`/devices/${editingDevice.id}`, deviceData);
+        Alert.alert('Success', 'Device updated successfully');
       } else {
-        await apiClient.post('/devices', deviceData);
+        response = await apiClient.post('/devices', deviceData);
+        Alert.alert('Success', 'Device created successfully');
       }
 
       setIsDeviceModalVisible(false);
       resetDeviceForm();
-      fetchData();
+      await fetchData(); // Refresh the data
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to save device');
+      let errorMessage = 'Failed to save device';
+      
+      if (error.response) {
+        // Handle specific error cases
+        switch (error.response.status) {
+          case 400:
+            errorMessage = error.response.data.message || 'Invalid device data';
+            break;
+          case 404:
+            errorMessage = 'Category not found';
+            break;
+          case 409:
+            errorMessage = 'A device with this name already exists in this category';
+            break;
+          default:
+            errorMessage = error.response.data.message || 'Server error occurred';
+        }
+      } else if (error.request) {
+        errorMessage = 'No response from server. Please check your connection.';
+      }
+
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -283,19 +342,22 @@ export default function DevicesScreen() {
             
             {category.devices && category.devices.length === 0 ? (
               <ThemedText style={styles.emptyMessage}>No devices in this category.</ThemedText>
-            ) : category.totalUsage === 0 && category.devices && category.devices.length > 0 ? (
-                <ThemedText style={styles.emptyMessage}>Devices exist, but no usage recorded yet.</ThemedText>
             ) : (
               <>
+                {category.totalUsage === 0 && (
+                  <ThemedText style={styles.emptyMessage}>Devices exist, but no usage recorded yet.</ThemedText>
+                )}
                 <ThemedText style={styles.deviceCount}>{category.devices?.length || 0} device(s)</ThemedText>
-                {category.devices?.map(device => (
-                  <DeviceItem 
-                    key={device.id} 
-                    device={device} 
-                    onEdit={handleEditDevice}
-                    onDelete={handleDeleteDevice}
-                  />
-                ))}
+                <View style={styles.devicesList}>
+                  {category.devices?.map(device => (
+                    <DeviceItem 
+                      key={device.id} 
+                      device={device} 
+                      onEdit={handleEditDevice}
+                      onDelete={handleDeleteDevice}
+                    />
+                  ))}
+                </View>
               </>
             )}
             <TouchableOpacity style={styles.categoryActionButton} onPress={() => handleAddDevice(category.id)}>
@@ -411,10 +473,19 @@ export default function DevicesScreen() {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.modalButton, styles.saveButton]} 
+                style={[
+                  styles.modalButton, 
+                  styles.saveButton,
+                  isSaving && styles.disabledButton
+                ]} 
                 onPress={handleSaveDevice}
+                disabled={isSaving}
               >
-                <ThemedText style={styles.saveButtonText}>Save</ThemedText>
+                {isSaving ? (
+                  <ActivityIndicator size="small" color={Colors.light.background} />
+                ) : (
+                  <ThemedText style={styles.saveButtonText}>Save</ThemedText>
+                )}
               </TouchableOpacity>
             </View>
           </ThemedView>
@@ -435,7 +506,7 @@ const styles = StyleSheet.create({
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
-    flex:1, // Ensure it takes space if content is small
+    flex: 1,
   },
   screenHeader: {
     flexDirection: 'row',
@@ -444,26 +515,19 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    flex: 1, 
-    color: Colors.light.text,
-    fontSize: 24, // Adjusted for no header
+    fontSize: 24,
     fontWeight: 'bold',
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.light.componentBase,
+    backgroundColor: Colors.light.tint,
+    padding: 10,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.highlight,
   },
   addButtonText: {
+    color: Colors.light.background,
     marginLeft: 5,
-    color: Colors.light.highlight,
-    fontSize: 14,
-    fontWeight: '500'
   },
   card: {
     backgroundColor: Colors.light.componentBase,
@@ -471,10 +535,10 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 15,
     shadowColor: Colors.light.text,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   categoryHeader: {
     flexDirection: 'row',
@@ -486,54 +550,50 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   headerActionIcon: {
-    padding: 5, // make touch target larger
+    padding: 5,
     marginLeft: 10,
   },
   icon: {
     marginRight: 10,
   },
   categoryName: {
-    flex: 1, 
-    color: Colors.light.highlight,
     fontSize: 18,
     fontWeight: '600',
   },
   totalUsage: {
     fontSize: 16,
-    // fontWeight: 'bold', // Made it normal weight for less emphasis than name
-    marginBottom: 8,
+    marginBottom: 10,
     color: Colors.light.text,
-    opacity: 0.9,
   },
   deviceCount: {
     fontSize: 14,
     color: Colors.light.text,
     opacity: 0.8,
-    marginBottom: 10,
+    marginBottom: 5,
   },
   emptyMessage: {
     fontStyle: 'italic',
     color: Colors.light.text,
     opacity: 0.7,
-    marginTop: 5,
+    marginBottom: 10,
+  },
+  devicesList: {
+    marginTop: 10,
     marginBottom: 10,
   },
   categoryActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    marginTop: 10,
     backgroundColor: Colors.light.background,
+    padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.light.detailsBase,
+    borderColor: Colors.light.tint,
   },
   categoryActionButtonText: {
-    marginLeft: 8,
     color: Colors.light.tint,
-    fontSize: 16,
-    fontWeight: '500'
+    marginLeft: 5,
   },
   deviceItem: {
     flexDirection: 'row',
@@ -553,7 +613,6 @@ const styles = StyleSheet.create({
   },
   deviceName: {
     fontSize: 16,
-    color: Colors.light.text,
   },
   deviceActions: {
     flexDirection: 'row',
@@ -569,15 +628,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    width: '90%',
     backgroundColor: Colors.light.componentBase,
     borderRadius: 12,
     padding: 20,
-    shadowColor: Colors.light.text,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    width: '90%',
+    maxWidth: 500,
   },
   modalTitle: {
     fontSize: 20,
@@ -591,8 +646,6 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 15,
     color: Colors.light.text,
-    borderWidth: 1,
-    borderColor: Colors.light.detailsBase,
   },
   textArea: {
     height: 100,
@@ -612,20 +665,18 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: Colors.light.background,
     borderWidth: 1,
-    borderColor: Colors.light.detailsBase,
+    borderColor: Colors.light.text,
   },
   saveButton: {
-    backgroundColor: Colors.light.highlight,
+    backgroundColor: Colors.light.tint,
   },
   cancelButtonText: {
     color: Colors.light.text,
     textAlign: 'center',
-    fontWeight: '500',
   },
   saveButtonText: {
     color: Colors.light.background,
     textAlign: 'center',
-    fontWeight: '500',
   },
   categorySelector: {
     marginBottom: 15,
@@ -633,16 +684,18 @@ const styles = StyleSheet.create({
   categoryLabel: {
     fontSize: 16,
     marginBottom: 8,
-    color: Colors.light.text,
   },
   categoryDropdown: {
     backgroundColor: Colors.light.background,
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: Colors.light.detailsBase,
+    borderColor: Colors.light.text,
   },
   selectedCategory: {
     color: Colors.light.text,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
 }); 

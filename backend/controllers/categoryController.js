@@ -18,7 +18,7 @@ exports.getCategories = async (req, res) => {
       include: [{
         model: Device,
         attributes: ['id', 'name', 'description', 'categoryId'],
-        as: 'devices'
+        as: 'Devices'
       }]
     });
     
@@ -27,7 +27,7 @@ exports.getCategories = async (req, res) => {
       const plainCategory = category.get({ plain: true });
       return {
         ...plainCategory,
-        devices: plainCategory.devices || []
+        devices: plainCategory.Devices || []
       };
     });
     
@@ -46,7 +46,8 @@ exports.getCategoryById = async (req, res) => {
     const category = await Category.findByPk(req.params.id, {
       include: [{
         model: Device,
-        attributes: ['id', 'name', 'description']
+        attributes: ['id', 'name', 'description'],
+        as: 'Devices'
       }]
     });
     if (!category) {

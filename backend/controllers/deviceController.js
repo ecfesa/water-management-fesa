@@ -4,21 +4,26 @@ const { Device, Category } = require('../models');
 exports.createDevice = async (req, res) => {
   try {
     const { name, description, categoryId } = req.body;
+    console.log('Received device data:', { name, description, categoryId });
     
+    // Validate category exists
     const category = await Category.findByPk(categoryId);
     if (!category) {
       return res.status(400).json({ message: `Category with ID ${categoryId} not found` });
     }
 
+    // Create device without userId for now
     const device = await Device.create({ 
       name, 
       description, 
       categoryId,
-      userId: null
+      userId: null // Explicitly set to null since we don't have user authentication yet
     });
     
+    console.log('Created device:', device.toJSON());
     res.status(201).json(device);
   } catch (error) {
+    console.error('Error creating device:', error);
     res.status(400).json({ 
       message: error.message,
       details: error.errors ? error.errors.map(e => e.message) : undefined

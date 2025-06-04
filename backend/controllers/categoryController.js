@@ -3,8 +3,8 @@ const { Category } = require('../models');
 // Create new category
 exports.createCategory = async (req, res) => {
   try {
-    const { name, iconName } = req.body;
-    const category = await Category.create({ name, iconName });
+    const { name, icon } = req.body;
+    const category = await Category.create({ name, icon });
     res.status(201).json(category);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -37,7 +37,7 @@ exports.getCategoryById = async (req, res) => {
 // Update category
 exports.updateCategory = async (req, res) => {
   try {
-    const { name, iconName } = req.body;
+    const { name, icon } = req.body;
     const category = await Category.findByPk(req.params.id);
     
     if (!category) {
@@ -45,7 +45,7 @@ exports.updateCategory = async (req, res) => {
     }
     
     if (name) category.name = name;
-    if (iconName) category.iconName = iconName;
+    if (icon) category.icon = icon;
     
     await category.save();
     res.json(category);

@@ -17,7 +17,7 @@ exports.getDevices = async (req, res) => {
     const devices = await Device.findAll({
       include: [{
         model: Category,
-        attributes: ['name', 'iconName']
+        attributes: ['name', 'icon']
       }]
     });
     res.json(devices);
@@ -32,7 +32,7 @@ exports.getDeviceById = async (req, res) => {
     const device = await Device.findByPk(req.params.id, {
       include: [{
         model: Category,
-        attributes: ['name', 'iconName']
+        attributes: ['name', 'icon']
       }]
     });
     

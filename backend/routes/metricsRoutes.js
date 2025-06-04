@@ -13,7 +13,7 @@ router.get('/daily-usage', async (req, res) => {
     startDate.setDate(startDate.getDate() - days);
 
     const whereClause = {
-      date: {
+      timestamp: {
         [Op.gte]: startDate
       }
     };
@@ -30,7 +30,7 @@ router.get('/daily-usage', async (req, res) => {
         model: Category,
         attributes: ['id', 'name']
       }],
-      order: [['date', 'ASC']]
+      order: [['timestamp', 'ASC']]
     });
 
     // Group data by date and category
@@ -38,10 +38,10 @@ router.get('/daily-usage', async (req, res) => {
     const dateMap = new Map();
 
     usages.forEach(usage => {
-      const dateStr = usage.date.toISOString().split('T')[0];
+      const dateStr = usage.timestamp.toISOString().split('T')[0];
       if (!dateMap.has(dateStr)) {
         dateMap.set(dateStr, {
-          date: dateStr,
+          timestamp: dateStr,
           total: 0
         });
       }

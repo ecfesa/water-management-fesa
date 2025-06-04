@@ -72,6 +72,8 @@ export default function DevicesScreen() {
         totalUsage: cat.totalUsage || 0,
         devices: cat.devices || []
       })));
+
+      console.log(categories);
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch device categories.';
       setError(errorMessage);
@@ -101,7 +103,6 @@ export default function DevicesScreen() {
     setDeviceName('');
     setDeviceDescription('');
     setEditingDevice(null);
-    setParentCategoryForNewDevice(null);
   };
 
   const handleAddCategory = () => {
@@ -160,8 +161,10 @@ export default function DevicesScreen() {
   };
 
   const handleAddDevice = (categoryId: string) => {
-    resetDeviceForm();
     setParentCategoryForNewDevice(categoryId);
+    setDeviceName('');
+    setDeviceDescription('');
+    setEditingDevice(null);
     setIsDeviceModalVisible(true);
   };
 
@@ -257,13 +260,13 @@ export default function DevicesScreen() {
         </View>
 
         {categories.length === 0 && !loading ? (
-            <ThemedView style={[styles.card, styles.centered, {minHeight: 150}]}>
+            <ThemedView key="empty-state" style={[styles.card, styles.centered, {minHeight: 150}]}>
                 <Ionicons name="information-circle-outline" size={40} color={Colors.light.icon} />
                 <ThemedText style={{marginTop:10}}>No categories found.</ThemedText>
                 <ThemedText style={{textAlign: 'center'}}>Tap 'New Category' to add your first one.</ThemedText>
             </ThemedView>
         ) : categories.map((category) => (
-          <ThemedView key={category.id} style={styles.card}>
+          <ThemedView key={category.id || `category-${Math.random()}`} style={styles.card}>
             <View style={styles.categoryHeader}>
               <Ionicons name={category.iconName || 'cube-outline'} size={24} color={Colors.light.highlight} style={styles.icon} />
               <ThemedText type="subtitle" style={styles.categoryName}>{category.name}</ThemedText>
@@ -386,6 +389,15 @@ export default function DevicesScreen() {
               numberOfLines={3}
               placeholderTextColor={Colors.light.text + '80'}
             />
+
+            <View style={styles.categorySelector}>
+              <ThemedText style={styles.categoryLabel}>Category:</ThemedText>
+              <View style={styles.categoryDropdown}>
+                <ThemedText style={styles.selectedCategory}>
+                  {categories.find(cat => cat.id === parentCategoryForNewDevice)?.name || 'Select a category'}
+                </ThemedText>
+              </View>
+            </View>
 
             <View style={styles.modalActions}>
               <TouchableOpacity 
@@ -614,5 +626,23 @@ const styles = StyleSheet.create({
     color: Colors.light.background,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  categorySelector: {
+    marginBottom: 15,
+  },
+  categoryLabel: {
+    fontSize: 16,
+    marginBottom: 8,
+    color: Colors.light.text,
+  },
+  categoryDropdown: {
+    backgroundColor: Colors.light.background,
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.detailsBase,
+  },
+  selectedCategory: {
+    color: Colors.light.text,
   },
 }); 

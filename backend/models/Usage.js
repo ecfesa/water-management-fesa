@@ -30,6 +30,22 @@ const Usage = sequelize.define('Usage', {
   notes: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  categoryId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Categories',
+      key: 'id'
+    }
+  },
+  userId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   }
 });
 

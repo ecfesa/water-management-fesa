@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   bigNumber: {
-    fontSize: 48,
+    fontSize: 40,
     padding: 20,
     fontWeight: 'bold',
     color: Colors.light.highlight,

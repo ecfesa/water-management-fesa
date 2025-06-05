@@ -106,10 +106,6 @@ const updateBillValidation = [
       }
       return true;
     }),
-  
-  body('photoUrl')
-    .optional()
-    .isURL().withMessage('Photo URL must be a valid URL')
 ];
 
 const paidDateValidation = [

@@ -61,10 +61,7 @@ const Bill = sequelize.define('Bill', {
   },
   photoUrl: {
     type: DataTypes.STRING,
-    allowNull: true,
-    validate: {
-      isUrl: true
-    }
+    allowNull: true
   }
 }, {
   timestamps: true,

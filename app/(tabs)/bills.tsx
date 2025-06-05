@@ -3,13 +3,14 @@ import { ThemedView } from '@/components/ThemedView';
 import { Colors } from '@/constants/Colors';
 import { Bill } from '@/types';
 import apiClient from '@/utils/apiClient';
+import { BASE_URL } from '@/utils/constants';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Button, Image, Modal, Platform, RefreshControl, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
-// import { VictoryLine, VictoryChart, VictoryAxis, VictoryLabel } from 'victory-native';
+import { ActivityIndicator, Alert, Button, Modal, Platform, RefreshControl, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 const formatDate = (dateString: string | Date | undefined) => {
   if (!dateString) return 'N/A';
@@ -40,6 +41,7 @@ export default function BillsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [modalPhotoVisible, setPhotoModalVisible] = useState(false);
   const [newBill, setNewBill] = useState<NewBillData>(initialNewBillState);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -331,36 +333,10 @@ export default function BillsScreen() {
       <ThemedView style={styles.contentContainer}>
         <View style={styles.headerActions}>
             <ThemedText type="title" style={styles.screenTitle}>Water Bills</ThemedText>
-            {bills.length > 1 && (
-                <View style={styles.buttonWrapper}>
-                    <Button title={showComparisonGraph ? "Hide Graph" : "Show Graph"} onPress={() => setShowComparisonGraph(!showComparisonGraph)} color={Colors.light.detailsBase} />
-                </View>
-            )}
         </View>
         <View style={styles.buttonWrapperMarginBtm}>
           <Button title="Add New Bill" onPress={openAddBillModal} color={Colors.light.highlight} />
         </View>
-
-        {showComparisonGraph && bills.length > 1 && (
-            <ThemedView style={styles.card}>
-                <ThemedText type="subtitle" style={styles.graphTitle}>Last {bills.length} Bills Comparison</ThemedText>
-                <View style={styles.graphPlaceholder}>
-                    <ThemedText style={styles.graphPlaceholderText}>
-                        Comparison Graph Area: Install 'victory-native'.
-                        {/* Data points: {chartData.length} */}
-                    </ThemedText>
-                    {/* <VictoryChart domainPadding={{ x: 20 }} height={250} scale={{ x: "time" }}>
-                        <VictoryAxis dependentAxis tickFormat={(tick) => `$${tick}`} />
-                        <VictoryAxis 
-                            tickCount={Math.min(6, chartData.length)} 
-                            tickFormat={(t) => new Date(t).toLocaleDateString('en-US', {month: 'short', year: '2-digit'})} 
-                            style={{ tickLabels: { angle: Platform.OS === 'ios' ? -30 : 0, textAnchor: Platform.OS === 'ios' ? 'end' : 'middle'} }}
-                        />
-                        <VictoryLine data={chartData} style={{ data: { stroke: Colors.light.highlight } }} />
-                    </VictoryChart> */}
-                </View>
-            </ThemedView>
-        )}
 
         {bills.length === 0 && !loading ? (
           <ThemedView style={[styles.card, styles.centered, {minHeight: 150}]}>
@@ -378,9 +354,17 @@ export default function BillsScreen() {
               <ThemedText>Water Used: {bill.waterUsed} L</ThemedText>
               <ThemedText>Period: {formatDate(bill.billPeriodStart)} - {formatDate(bill.billPeriodEnd)}</ThemedText>
               {bill.photoUrl && 
-                <TouchableOpacity onPress={() => Alert.alert("View Photo", "Implement photo viewer for " + bill.photoUrl)}>
-                    <ThemedText style={{color: Colors.light.tint, textDecorationLine: 'underline'}}>View Bill Photo</ThemedText>
-                </TouchableOpacity>}
+              <Image
+                  source={{ uri: BASE_URL + bill.photoUrl }}
+                  contentFit="scale-down"
+                  transition={1000}
+                  style={{
+                    height: 200,
+                    backgroundColor: '#0553'
+                  }}
+
+                />
+              }
               <View style={styles.billActionsContainer}>
                 <TouchableOpacity style={styles.billAction} onPress={() => openEditBillModal(bill)}>
                   <Ionicons name="pencil-outline" size={20} color={Colors.light.detailsBase} />
@@ -506,6 +490,7 @@ export default function BillsScreen() {
             </ScrollView>
           </View>
         </Modal>
+
       </ThemedView>
     </ScrollView>
   );
